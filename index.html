@@ -7,7 +7,6 @@
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#020617">
-<meta name="apple-mobile-web-app-capable" content="yes">
 
 <style>
 body{background:#020617;color:#e2e8f0;font-family:-apple-system;text-align:center;padding:20px;}
@@ -21,15 +20,18 @@ h1{font-size:34px}
 .money{color:#fbbf24;}
 .diff{color:#3b82f6;font-weight:bold;}
 .salary{color:#22c55e;font-weight:bold;}
+button{margin-top:10px;padding:10px 20px;border:none;border-radius:8px;background:#3b82f6;color:white;font-weight:bold;}
 </style>
 </head>
-<body>
 
+<body>
 <div class="container">
 <h1>Pension Countdown</h1>
 
 <select id="profile"></select><br><br>
-<select id="target"></select>
+<select id="target"></select><br><br>
+
+<button onclick="toggleMoney()">💰 Geld anzeigen</button>
 
 <div id="results"></div>
 </div>
@@ -38,13 +40,12 @@ h1{font-size:34px}
 
 const VACATION_PER_YEAR = 33
 const SALARY_RAISE = 0.015
+let showMoney = false
 
 const profiles={
-horst:{salary:3200,pensionStart:2300,pensionEnd:2600,
-birth:new Date("1966-12-18"),
+horst:{salary:3200,pensionStart:2300,pensionEnd:2600,birth:new Date("1966-12-18"),
 targets:["2029-01-01","2029-04-01","2030-01-01","2030-04-01","2032-01-01"]},
-silvia:{salary:3000,pensionStart:2000,pensionEnd:2300,
-birth:new Date("1967-12-23"),
+silvia:{salary:3000,pensionStart:2000,pensionEnd:2300,birth:new Date("1967-12-23"),
 targets:["2030-04-01","2030-06-01","2031-01-01","2032-01-01","2033-01-01"]}
 }
 
@@ -54,6 +55,12 @@ const HORST_FIRST=new Date("2029-01-01")
 let intervals=[]
 
 function clearIntervals(){intervals.forEach(i=>clearInterval(i));intervals=[]}
+
+function toggleMoney(){
+showMoney=!showMoney
+document.querySelector("button").innerText = showMoney ? "💰 Geld ausblenden" : "💰 Geld anzeigen"
+update()
+}
 
 function formatTime(sec){
 sec=Math.max(0,sec)
@@ -73,8 +80,42 @@ if(months < 0){ years--; months += 12 }
 return {years, months}
 }
 
+// 🔥 Easter calculation
+function getEaster(year){
+let a = year % 19
+let b = Math.floor(year/100)
+let c = year % 100
+let d = Math.floor(b/4)
+let e = b % 4
+let f = Math.floor((b+8)/25)
+let g = Math.floor((b-f+1)/3)
+let h = (19*a+b-d-g+15)%30
+let i = Math.floor(c/4)
+let k = c % 4
+let l = (32+2*e+2*i-h-k)%7
+let m = Math.floor((a+11*h+22*l)/451)
+let month = Math.floor((h+l-7*m+114)/31)
+let day = ((h+l-7*m+114)%31)+1
+return new Date(year, month-1, day)
+}
+
 function holidays(y){
-return [y+"-01-01",y+"-01-06",y+"-05-01",y+"-08-15",y+"-10-26",y+"-11-01",y+"-12-08",y+"-12-25",y+"-12-26"]
+
+let easter = getEaster(y)
+
+let easterMonday = new Date(easter); easterMonday.setDate(easter.getDate()+1)
+let ascension = new Date(easter); ascension.setDate(easter.getDate()+39)
+let pentecost = new Date(easter); pentecost.setDate(easter.getDate()+50)
+let corpus = new Date(easter); corpus.setDate(easter.getDate()+60)
+
+function f(d){ return d.toISOString().split("T")[0] }
+
+return [
+y+"-01-01",y+"-01-06",y+"-05-01",
+y+"-08-15",y+"-10-26",y+"-11-01",
+y+"-12-08",y+"-12-25",y+"-12-26",
+f(easterMonday),f(ascension),f(pentecost),f(corpus)
+]
 }
 
 function isHoliday(d){
@@ -120,15 +161,22 @@ let end=new Date(p.targets[i])
 let now=new Date()
 
 let ws=workdays(now,end)
-
-let pen=pension(p,i)
-let sal=salary(p.salary,now,end)
-let diff=sal-pen
-
 let age = calculateAgeDetailed(p.birth, end)
 
 let ref=(pKey==="horst")?SILVIA_FIRST:HORST_FIRST
 let refText=(pKey==="horst")?"Unterschied zu Silvia":"Unterschied zu Horst"
+
+let moneyHtml=""
+
+if(showMoney){
+let pen=pension(p,i)
+let sal=salary(p.salary,now,end)
+let diff=sal-pen
+
+moneyHtml += "<div class='box money'>Pension<br>€ "+pen+"</div>"
+moneyHtml += "<div class='box salary'>Gehalt<br>€ "+sal+"</div>"
+moneyHtml += "<div class='box diff'>Differenz<br>€ "+diff+"</div>"
+}
 
 document.getElementById("results").innerHTML=
 "<div class='card'>"+
@@ -142,16 +190,21 @@ document.getElementById("results").innerHTML=
 "<div class='box'>Wochenenden<br>"+ws.we+"</div>"+
 "<div class='box'>Feiertage<br>"+ws.h+"</div>"+
 "<div class='box'>Urlaubstage<br>"+ws.vac+"</div>"+
-"<div class='box money'>Pension<br>€ "+pen+"</div>"+
-"<div class='box salary'>Gehalt aktiv<br>€ "+sal+"</div>"+
-"<div class='box diff'>Unterschied zu Gehalt<br>€ "+diff+"</div>"+
+moneyHtml+
 "<div class='box diff'>"+refText+"<br>"+formatTime(Math.abs(end-ref)/1000)+"</div>"+
 "</div></div>"
 
 let workSec=ws.w*86400
 
-intervals.push(setInterval(()=>{workSec--;document.getElementById("work").innerHTML=formatTime(workSec)},1000))
-intervals.push(setInterval(()=>{let s=Math.floor((end-new Date())/1000);document.getElementById("real").innerHTML=formatTime(s)},1000))
+intervals.push(setInterval(()=>{
+workSec--
+document.getElementById("work").innerHTML=formatTime(workSec)
+},1000))
+
+intervals.push(setInterval(()=>{
+let s=Math.floor((end-new Date())/1000)
+document.getElementById("real").innerHTML=formatTime(s)
+},1000))
 }
 
 function init(){
@@ -187,5 +240,6 @@ update()
 init()
 
 </script>
+
 </body>
 </html>
